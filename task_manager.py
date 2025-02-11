@@ -1,27 +1,48 @@
+import json
 import os
 
-TASKS_FILE = "tasks.txt"
+TASKS_FILE = "tasks.json"
 
-# Load tasks from the file
 def load_tasks():
-    try:
-        with open(TASKS_FILE, "r") as f:
-            lines = f.readlines()
-    except FileNotFoundError:
+    if not os.path.exists(TASKS_FILE):
         return []
+    with open(TASKS_FILE, "r") as f:
+        return json.load(f)
 
-    def parse_task_line(line):
-        parts = line.split("|")
-        return {"description": parts[0], "status": parts[1]}
 
-    return [parse_task_line(line.strip()) for line in lines if line.strip()]
-
-# Save tasks to the file
 def save_tasks(tasks):
     with open(TASKS_FILE, "w") as f:
-        for task in tasks:
-            f.write(f"{task['description']}|{task['status']}\n")
+        json.dump(tasks, f, indent=4)
+    print(f"[INFO] Tasks saved to {TASKS_FILE}.")
+    commit_changes()
 
-# Utility function to create a task
-def create_task(description="Untitled Task", status="Pending"):
-    return {"description": description, "status": status}
+
+def commit_changes():
+    """Minimal manual commit."""
+    os.system('git add tasks.json')
+    os.system('git commit -m "Updated tasks.json"')
+    print("[INFO] Changes committed manually.")
+
+
+def add_task(description):
+    tasks = load_tasks()
+    tasks.append({"description": description, "status": "Pending"})
+    save_tasks(tasks)
+
+
+def complete_task(task_index):
+    tasks = load_tasks()
+    if 0 <= task_index < len(tasks):
+        tasks[task_index]["status"] = "Completed"
+        save_tasks(tasks)
+    else:
+        print("[ERROR] Task not found.")
+
+
+def delete_task(task_index):
+    tasks = load_tasks()
+    if 0 <= task_index < len(tasks):
+        del tasks[task_index]
+        save_tasks(tasks)
+    else:
+        print("[ERROR] Task not found.")

@@ -2,9 +2,68 @@ import tkinter as tk
 import os
 from threading import Thread
 from flask import Flask, request, jsonify, render_template_string
-from task_manager import load_tasks, save_tasks, add_task as task_manager_add_task, complete_task as task_manager_complete_task, delete_task as task_manager_delete_task
+
+TASKS_FILE = "tasks.txt"
 
 app = Flask(__name__)
+tasks = []
+
+
+def load_tasks():
+    if not os.path.exists(TASKS_FILE):
+        return []
+    with open(TASKS_FILE, "r") as f:
+        lines = f.readlines()
+        loaded_tasks = []
+        for line in lines:
+            if " | " in line.strip():
+                description, status = line.strip().split(" | ", 1)
+                loaded_tasks.append({"description": description, "status": status})
+            else:
+                # Skip invalid lines or handle them differently if needed
+                print(f"[WARNING] Ignoring invalid task entry: '{line.strip()}'")
+        return loaded_tasks
+
+
+
+def save_tasks(tasks):
+    with open(TASKS_FILE, "w") as f:
+        for task in tasks:
+            f.write(f"{task['description']} | {task['status']}\n")
+
+def load_tasks():
+    tasks = []
+    try:
+        with open(TASKS_FILE, "r") as file:
+            for line in file:
+                if "|" in line:
+                    parts = [part.strip() for part in line.split("|")]
+                    if len(parts) == 2:
+                        tasks.append({"description": parts[0], "status": parts[1]})
+                    else:
+                        print(f"[WARNING] Ignoring invalid task entry: '{line.strip()}'")
+                else:
+                    print(f"[WARNING] Ignoring invalid task entry: '{line.strip()}'")
+    except FileNotFoundError:
+        print("[INFO] No task file found; starting fresh.")
+    
+    # Automatically fix formatting issues
+    fix_tasks_file()
+    
+    return tasks
+
+def fix_tasks_file():
+    with open(TASKS_FILE, "r") as file:
+        lines = file.readlines()
+    with open(TASKS_FILE, "w") as file:
+        for line in lines:
+            if "|" in line:
+                fixed_line = " | ".join(part.strip() for part in line.split("|"))
+                file.write(f"{fixed_line}\n")
+            else:
+                file.write(line)
+
+
 tasks = load_tasks()
 
 @app.route("/")
@@ -63,8 +122,9 @@ def home():
         </html>
     ''', tasks=tasks, enumerate=enumerate)
 
+
 @app.route("/tasks", methods=["POST"])
-def add_task_api():
+def add_task():
     data = request.json
     new_task = {"description": data.get("description", "Untitled Task"), "status": "Pending"}
     tasks.append(new_task)
@@ -72,8 +132,9 @@ def add_task_api():
     update_gui()
     return jsonify({"message": "Task added"}), 201
 
+
 @app.route("/tasks/<int:task_id>", methods=["PUT"])
-def complete_task_api(task_id):
+def complete_task(task_id):
     if 0 <= task_id < len(tasks):
         tasks[task_id]["status"] = "Completed"
         save_tasks(tasks)
@@ -81,8 +142,9 @@ def complete_task_api(task_id):
         return jsonify({"message": "Task completed"}), 200
     return jsonify({"error": "Task not found"}), 404
 
+
 @app.route("/tasks/<int:task_id>", methods=["DELETE"])
-def delete_task_api(task_id):
+def delete_task(task_id):
     if 0 <= task_id < len(tasks):
         del tasks[task_id]
         save_tasks(tasks)
@@ -90,9 +152,11 @@ def delete_task_api(task_id):
         return jsonify({"message": "Task deleted"}), 200
     return jsonify({"error": "Task not found"}), 404
 
+
 @app.route("/exit", methods=["POST"])
 def exit_app():
     os._exit(0)
+
 
 def update_gui():
     listbox.delete(0, tk.END)
@@ -102,13 +166,14 @@ def update_gui():
         if task["status"] == "Completed":
             listbox.itemconfig(i, {'fg': 'green'})
 
+
 def add_task_gui(description="Untitled Task"):
     if description:
-        new_task = {"description": description, "status": "Pending"}
-        tasks.append(new_task)
+        tasks.append({"description": description, "status": "Pending"})
         save_tasks(tasks)
         entry.delete(0, tk.END)
         update_gui()
+
 
 def complete_task_gui():
     selected = listbox.curselection()
@@ -118,6 +183,7 @@ def complete_task_gui():
         save_tasks(tasks)
         update_gui()
 
+
 def delete_task_gui():
     selected = listbox.curselection()
     if selected:
@@ -126,9 +192,11 @@ def delete_task_gui():
         save_tasks(tasks)
         update_gui()
 
+
 def exit_gui():
     root.quit()
     os._exit(0)
+
 
 root = tk.Tk()
 root.title("My To-Do App")
@@ -163,8 +231,10 @@ exit_button.grid(row=0, column=2, padx=5)
 
 update_gui()
 
+
 def run_flask():
     app.run(port=5000, debug=False, use_reloader=False)
+
 
 Thread(target=run_flask).start()
 root.mainloop()
