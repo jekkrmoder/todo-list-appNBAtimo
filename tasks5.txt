@@ -2,3 +2,6 @@ test 1 | Completed
 test 2 | Completed
 yes | Completed
 oh wat lekker zeg | Completed
+ajjajaj | Completed
+PND 4 | Pending
+Siii maatje | Pending

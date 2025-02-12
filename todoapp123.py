@@ -12,25 +12,21 @@ task_manager.ensure_tasks_file_exists()
 app = Flask(__name__)
 tasks = []
 
-# 1. Using List Comprehension to load tasks efficiently
 def load_tasks():
     if not os.path.exists(TASKS_FILE):
         return []
     with open(TASKS_FILE, "r") as f:
         lines = f.readlines()
-        # List comprehension to load tasks from file
         loaded_tasks = [
             {"description": description, "status": status}
             for line in lines if " | " in line.strip()
             for description, status in [line.strip().split(" | ", 1)]
         ]
-        # If any line doesn't match the format, it will be skipped
         invalid_lines = [line.strip() for line in lines if " | " not in line]
         if invalid_lines:
             print(f"[WARNING] Ignoring invalid task entries: {invalid_lines}")
         return loaded_tasks
 
-# 2. Error handling with try-except when saving tasks
 def save_tasks(tasks):
     try:
         with open(TASKS_FILE, "w") as f:
@@ -39,7 +35,6 @@ def save_tasks(tasks):
     except IOError as e:
         print(f"[ERROR] Failed to save tasks: {e}")
 
-# 3. Match-case for fixing tasks file and handling different cases
 def fix_tasks_file():
     try:
         with open(TASKS_FILE, "r") as file:
@@ -200,7 +195,7 @@ def exit_gui():
 def update_date_time():
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     date_time_label.config(text=f"Current Date and Time: {now}")
-    root.after(1000, update_date_time)  # Update every second
+    root.after(1000, update_date_time)  
 
 
 root = tk.Tk()
@@ -241,7 +236,7 @@ exit_button = tk.Button(button_frame, text="Exit", font=("Arial", 12), bg="#6C75
 exit_button.grid(row=0, column=2, padx=5)
 
 update_gui()
-update_date_time()  # Start updating time in Tkinter
+update_date_time() 
 
 def run_flask():
     app.run(port=5000, debug=False, use_reloader=False)
