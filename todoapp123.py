@@ -5,7 +5,6 @@ from flask import Flask, request, jsonify, render_template_string
 import task_manager
 from datetime import datetime
 
-
 TASKS_FILE = "tasks5.txt"
 
 task_manager.ensure_tasks_file_exists()
@@ -13,44 +12,54 @@ task_manager.ensure_tasks_file_exists()
 app = Flask(__name__)
 tasks = []
 
+# 1. Using List Comprehension to load tasks efficiently
 def load_tasks():
     if not os.path.exists(TASKS_FILE):
         return []
     with open(TASKS_FILE, "r") as f:
         lines = f.readlines()
-        loaded_tasks = []
-        for line in lines:
-            if " | " in line.strip():
-                description, status = line.strip().split(" | ", 1)
-                loaded_tasks.append({"description": description, "status": status})
-            else:
-                print(f"[WARNING] Ignoring invalid task entry: '{line.strip()}'")
+        # List comprehension to load tasks from file
+        loaded_tasks = [
+            {"description": description, "status": status}
+            for line in lines if " | " in line.strip()
+            for description, status in [line.strip().split(" | ", 1)]
+        ]
+        # If any line doesn't match the format, it will be skipped
+        invalid_lines = [line.strip() for line in lines if " | " not in line]
+        if invalid_lines:
+            print(f"[WARNING] Ignoring invalid task entries: {invalid_lines}")
         return loaded_tasks
 
-
+# 2. Error handling with try-except when saving tasks
 def save_tasks(tasks):
-    with open(TASKS_FILE, "w") as f:
-        for task in tasks:
-            f.write(f"{task['description']} | {task['status']}\n")
+    try:
+        with open(TASKS_FILE, "w") as f:
+            for task in tasks:
+                f.write(f"{task['description']} | {task['status']}\n")
+    except IOError as e:
+        print(f"[ERROR] Failed to save tasks: {e}")
 
+# 3. Match-case for fixing tasks file and handling different cases
 def fix_tasks_file():
-    with open(TASKS_FILE, "r") as file:
-        lines = file.readlines()
-    with open(TASKS_FILE, "w") as file:
-        for line in lines:
-            if "|" in line:
-                fixed_line = " | ".join(part.strip() for part in line.split("|"))
-                file.write(f"{fixed_line}\n")
-            else:
-                file.write(line)
-
+    try:
+        with open(TASKS_FILE, "r") as file:
+            lines = file.readlines()
+        with open(TASKS_FILE, "w") as file:
+            for line in lines:
+                match line:
+                    case _ if "|" in line:
+                        fixed_line = " | ".join(part.strip() for part in line.split("|"))
+                        file.write(f"{fixed_line}\n")
+                    case _:
+                        file.write(line)
+    except Exception as e:
+        print(f"[ERROR] An error occurred while fixing the tasks file: {e}")
 
 tasks = load_tasks()
 
 @app.route("/")
 def home():
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    return render_template_string('''
+    return render_template_string(''' 
         <html>
         <head>
             <title>My Todo App</title>
@@ -60,10 +69,17 @@ def home():
                 .pending { color: black; }
                 button { margin-left: 10px; padding: 5px 10px; }
             </style>
+            <script>
+                function updateTime() {
+                    let now = new Date();
+                    document.getElementById("liveTime").innerText = now.toLocaleString();
+                }
+                setInterval(updateTime, 1000);
+            </script>
         </head>
-        <body>
+        <body onload="updateTime()">
             <h1>My Todo App</h1>
-            <h2>Current Date and Time: {{ current_time }}</h2>
+            <h2>Current Date and Time: <span id="liveTime"></span></h2>
             <ul>
                 {% for index, task in enumerate(tasks) %}
                     <li class="{{ 'completed' if task['status'] == 'Completed' else 'pending' }}">
@@ -103,8 +119,7 @@ def home():
             </script>
         </body>
         </html>
-    ''', tasks=tasks, current_time=current_time, enumerate=enumerate)
-
+    ''', tasks=tasks, enumerate=enumerate)
 
 @app.route("/tasks", methods=["POST"])
 def add_task():
@@ -115,31 +130,37 @@ def add_task():
     update_gui()
     return jsonify({"message": "Task added"}), 201
 
-
 @app.route("/tasks/<int:task_id>", methods=["PUT"])
 def complete_task(task_id):
-    if 0 <= task_id < len(tasks):
-        tasks[task_id]["status"] = "Completed"
-        save_tasks(tasks)
-        update_gui()
-        return jsonify({"message": "Task completed"}), 200
-    return jsonify({"error": "Task not found"}), 404
-
+    try:
+        match task_id:
+            case _ if 0 <= task_id < len(tasks):
+                tasks[task_id]["status"] = "Completed"
+                save_tasks(tasks)
+                update_gui()
+                return jsonify({"message": "Task completed"}), 200
+            case _:
+                raise IndexError("Task not found")
+    except IndexError as e:
+        return jsonify({"error": str(e)}), 404
 
 @app.route("/tasks/<int:task_id>", methods=["DELETE"])
 def delete_task(task_id):
-    if 0 <= task_id < len(tasks):
-        del tasks[task_id]
-        save_tasks(tasks)
-        update_gui()
-        return jsonify({"message": "Task deleted"}), 200
-    return jsonify({"error": "Task not found"}), 404
-
+    try:
+        match task_id:
+            case _ if 0 <= task_id < len(tasks):
+                del tasks[task_id]
+                save_tasks(tasks)
+                update_gui()
+                return jsonify({"message": "Task deleted"}), 200
+            case _:
+                raise IndexError("Task not found")
+    except IndexError as e:
+        return jsonify({"error": str(e)}), 404
 
 @app.route("/exit", methods=["POST"])
 def exit_app():
     os._exit(0)
-
 
 def update_gui():
     listbox.delete(0, tk.END)
@@ -149,14 +170,12 @@ def update_gui():
         if task["status"] == "Completed":
             listbox.itemconfig(i, {'fg': 'green'})
 
-
 def add_task_gui(description="Untitled Task"):
     if description:
         tasks.append({"description": description, "status": "Pending"})
         save_tasks(tasks)
         entry.delete(0, tk.END)
         update_gui()
-
 
 def complete_task_gui():
     selected = listbox.curselection()
@@ -166,7 +185,6 @@ def complete_task_gui():
         save_tasks(tasks)
         update_gui()
 
-
 def delete_task_gui():
     selected = listbox.curselection()
     if selected:
@@ -175,19 +193,14 @@ def delete_task_gui():
         save_tasks(tasks)
         update_gui()
 
-
 def exit_gui():
     root.quit()
     os._exit(0)
-
-
-
 
 def update_date_time():
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     date_time_label.config(text=f"Current Date and Time: {now}")
     root.after(1000, update_date_time)  # Update every second
-
 
 
 root = tk.Tk()
@@ -203,7 +216,8 @@ frame.pack(pady=10)
 
 entry = tk.Entry(frame, width=30, font=("Arial", 12))
 entry.pack(side=tk.LEFT, padx=5)
-add_button = tk.Button(frame, text="Add", font=("Arial", 12), bg="#007BFF", fg="white", command=lambda: add_task_gui(entry.get() or "Untitled Task"))
+add_button = tk.Button(frame, text="Add", font=("Arial", 12), bg="#007BFF", fg="white",
+                        command=lambda: add_task_gui(entry.get() or "Untitled Task"))
 add_button.pack(side=tk.LEFT)
 
 listbox = tk.Listbox(root, width=50, height=12, font=("Arial", 12))
@@ -212,32 +226,26 @@ listbox.pack(pady=10)
 date_time_label = tk.Label(root, text="", font=("Arial", 12), bg="#f4f4f4")
 date_time_label.pack(pady=10)
 
-
 button_frame = tk.Frame(root, bg="#f4f4f4")
 button_frame.pack()
 
-complete_button = tk.Button(button_frame, text="Complete", font=("Arial", 12), bg="#28A745", fg="white", command=complete_task_gui)
+complete_button = tk.Button(button_frame, text="Complete", font=("Arial", 12), bg="#28A745", fg="white",
+                            command=complete_task_gui)
 complete_button.grid(row=0, column=0, padx=5)
 
-delete_button = tk.Button(button_frame, text="Delete", font=("Arial", 12), bg="#DC3545", fg="white", command=delete_task_gui)
+delete_button = tk.Button(button_frame, text="Delete", font=("Arial", 12), bg="#DC3545", fg="white",
+                          command=delete_task_gui)
 delete_button.grid(row=0, column=1, padx=5)
 
 exit_button = tk.Button(button_frame, text="Exit", font=("Arial", 12), bg="#6C757D", fg="white", command=exit_gui)
 exit_button.grid(row=0, column=2, padx=5)
 
 update_gui()
+update_date_time()  # Start updating time in Tkinter
 
 def run_flask():
     app.run(port=5000, debug=False, use_reloader=False)
 
 Thread(target=run_flask).start()
 
-# Basic while loop to keep program alive without interfering
-counter = 0
-while counter < 3:
-    print("Background Task Running...", counter)
-    counter += 1
-
 root.mainloop()
-
-

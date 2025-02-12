@@ -4,7 +4,7 @@ from threading import Thread
 from flask import Flask, request, jsonify, render_template_string
 import task_manager
 from datetime import datetime
-
+import time
 
 TASKS_FILE = "tasks5.txt"
 
@@ -27,7 +27,6 @@ def load_tasks():
                 print(f"[WARNING] Ignoring invalid task entry: '{line.strip()}'")
         return loaded_tasks
 
-
 def save_tasks(tasks):
     with open(TASKS_FILE, "w") as f:
         for task in tasks:
@@ -44,12 +43,17 @@ def fix_tasks_file():
             else:
                 file.write(line)
 
-
+def background_task():
+    """Background task running in a while loop without interfering with GUI or Flask."""
+    while True:
+        print("[INFO] Background task running...")
+        time.sleep(10)  # Runs every 10 seconds
 tasks = load_tasks()
+
+Thread(target=background_task, daemon=True).start()
 
 @app.route("/")
 def home():
-    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     return render_template_string('''
         <html>
         <head>
@@ -60,10 +64,17 @@ def home():
                 .pending { color: black; }
                 button { margin-left: 10px; padding: 5px 10px; }
             </style>
+            <script>
+                function updateTime() {
+                    let now = new Date();
+                    document.getElementById("liveTime").innerText = now.toLocaleString();
+                }
+                setInterval(updateTime, 1000);
+            </script>
         </head>
-        <body>
+        <body onload="updateTime()">
             <h1>My Todo App</h1>
-            <h2>Current Date and Time: {{ current_time }}</h2>
+            <h2>Current Date and Time: <span id="liveTime"></span></h2>
             <ul>
                 {% for index, task in enumerate(tasks) %}
                     <li class="{{ 'completed' if task['status'] == 'Completed' else 'pending' }}">
@@ -103,8 +114,7 @@ def home():
             </script>
         </body>
         </html>
-    ''', tasks=tasks, current_time=current_time, enumerate=enumerate)
-
+    ''', tasks=tasks, enumerate=enumerate)
 
 @app.route("/tasks", methods=["POST"])
 def add_task():
@@ -115,7 +125,6 @@ def add_task():
     update_gui()
     return jsonify({"message": "Task added"}), 201
 
-
 @app.route("/tasks/<int:task_id>", methods=["PUT"])
 def complete_task(task_id):
     if 0 <= task_id < len(tasks):
@@ -124,7 +133,6 @@ def complete_task(task_id):
         update_gui()
         return jsonify({"message": "Task completed"}), 200
     return jsonify({"error": "Task not found"}), 404
-
 
 @app.route("/tasks/<int:task_id>", methods=["DELETE"])
 def delete_task(task_id):
@@ -135,11 +143,9 @@ def delete_task(task_id):
         return jsonify({"message": "Task deleted"}), 200
     return jsonify({"error": "Task not found"}), 404
 
-
 @app.route("/exit", methods=["POST"])
 def exit_app():
     os._exit(0)
-
 
 def update_gui():
     listbox.delete(0, tk.END)
@@ -148,7 +154,6 @@ def update_gui():
         listbox.insert(tk.END, text)
         if task["status"] == "Completed":
             listbox.itemconfig(i, {'fg': 'green'})
-
 
 def add_task_gui(description="Untitled Task"):
     if description:
@@ -175,19 +180,14 @@ def delete_task_gui():
         save_tasks(tasks)
         update_gui()
 
-
 def exit_gui():
     root.quit()
     os._exit(0)
-
-
-
 
 def update_date_time():
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     date_time_label.config(text=f"Current Date and Time: {now}")
     root.after(1000, update_date_time)  # Update every second
-
 
 
 root = tk.Tk()
@@ -203,7 +203,8 @@ frame.pack(pady=10)
 
 entry = tk.Entry(frame, width=30, font=("Arial", 12))
 entry.pack(side=tk.LEFT, padx=5)
-add_button = tk.Button(frame, text="Add", font=("Arial", 12), bg="#007BFF", fg="white", command=lambda: add_task_gui(entry.get() or "Untitled Task"))
+add_button = tk.Button(frame, text="Add", font=("Arial", 12), bg="#007BFF", fg="white",
+                        command=lambda: add_task_gui(entry.get() or "Untitled Task"))
 add_button.pack(side=tk.LEFT)
 
 listbox = tk.Listbox(root, width=50, height=12, font=("Arial", 12))
@@ -212,32 +213,26 @@ listbox.pack(pady=10)
 date_time_label = tk.Label(root, text="", font=("Arial", 12), bg="#f4f4f4")
 date_time_label.pack(pady=10)
 
-
 button_frame = tk.Frame(root, bg="#f4f4f4")
 button_frame.pack()
 
-complete_button = tk.Button(button_frame, text="Complete", font=("Arial", 12), bg="#28A745", fg="white", command=complete_task_gui)
+complete_button = tk.Button(button_frame, text="Complete", font=("Arial", 12), bg="#28A745", fg="white",
+                            command=complete_task_gui)
 complete_button.grid(row=0, column=0, padx=5)
 
-delete_button = tk.Button(button_frame, text="Delete", font=("Arial", 12), bg="#DC3545", fg="white", command=delete_task_gui)
+delete_button = tk.Button(button_frame, text="Delete", font=("Arial", 12), bg="#DC3545", fg="white",
+                          command=delete_task_gui)
 delete_button.grid(row=0, column=1, padx=5)
 
 exit_button = tk.Button(button_frame, text="Exit", font=("Arial", 12), bg="#6C757D", fg="white", command=exit_gui)
 exit_button.grid(row=0, column=2, padx=5)
 
 update_gui()
+update_date_time()  # Start updating time in Tkinter
 
 def run_flask():
     app.run(port=5000, debug=False, use_reloader=False)
 
 Thread(target=run_flask).start()
 
-# Basic while loop to keep program alive without interfering
-counter = 0
-while counter < 3:
-    print("Background Task Running...", counter)
-    counter += 1
-
 root.mainloop()
-
-
